@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api"; // задаётся как VITE_API_BASE в Vercel
-const MANAGER_ID = "demo-manager"; // временно, до подключения Supabase Auth UI
+const MANAGER_ID = "00000000-0000-0000-0000-000000000001"; // временно, до подключения Supabase Auth UI
 
 const CRITERIA = [
   { key: "financial", label: "Финансы" },
