@@ -11,6 +11,20 @@ const CRITERIA = [
   { key: "urgency", label: "Срочность" },
 ];
 
+const INDUSTRY_OPTIONS = [
+  { value: "signage", label: "Наружная реклама (вывески)" },
+  { value: "consulting", label: "Консалтинг" },
+  { value: "ecommerce", label: "E-commerce" },
+  { value: "education", label: "Образование" },
+  { value: "enterprise_b2b", label: "Корпоративный B2B" },
+  { value: "manufacturing", label: "Производство" },
+  { value: "medical", label: "Медицина" },
+  { value: "real_estate", label: "Недвижимость" },
+  { value: "saas", label: "SaaS" },
+  { value: "services", label: "Услуги" },
+  { value: "small_business", label: "Малый бизнес" },
+];
+
 const STATUS_COLOR = {
   "Подтверждено": "#6FA888",
   "Вероятно": "#9AA0AC",
@@ -157,7 +171,7 @@ export default function App() {
   const [thinking, setThinking] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [showNewDeal, setShowNewDeal] = useState(false);
-  const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "" });
+  const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage" });
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const scrollRef = useRef(null);
   const appRef = useRef(null);
@@ -251,7 +265,7 @@ export default function App() {
       setDeals((prev) => [deal, ...prev]);
       setActiveId(deal.id);
       setShowNewDeal(false);
-      setNewDealForm({ client: "", product: "", deal_size: "", days_silent: "" });
+      setNewDealForm({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage" });
     } catch (e) {
       setLoadError(e.message);
     }
@@ -509,6 +523,17 @@ function NewDealForm({ form, setForm, onSubmit, onCancel }) {
         value={form.days_silent}
         onChange={(e) => setForm({ ...form, days_silent: e.target.value })}
       />
+      <select
+        style={styles.newDealInput}
+        value={form.industry || "signage"}
+        onChange={(e) => setForm({ ...form, industry: e.target.value })}
+      >
+        {INDUSTRY_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
       <div style={{ display: "flex", gap: 8 }}>
         <button style={styles.newDealBtn} onClick={onSubmit}>Создать</button>
         <button style={styles.cancelBtn} onClick={onCancel}>Отмена</button>
