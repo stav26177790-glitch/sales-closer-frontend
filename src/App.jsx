@@ -159,7 +159,7 @@ export default function App() {
   const [thinking, setThinking] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [showNewDeal, setShowNewDeal] = useState(false);
-  const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: 0 });
+  const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "" });
   const scrollRef = useRef(null);
 
   const deal = deals.find((d) => d.id === activeId);
@@ -224,7 +224,45 @@ export default function App() {
       setDeals((prev) => [deal, ...prev]);
       setActiveId(deal.id);
       setShowNewDeal(false);
-      setNewDealForm({ client: "", product: "", deal_size: "", days_silent: 0 });
+      setNewDealForm({ client: "", product: "", deal_size: "", days_silent: "" });
+    } catch (e) {
+      setLoadError(e.message);
+    }
+  }
+
+  // Менеджер подтверждает или отклоняет сделку как полезный опыт для агента
+  async function handleExperienceDecision(dealId, decision) {
+    try {
+      const { deal: updated } = await api(`/deals/${dealId}/experience`, {
+        method: "PATCH",
+        body: JSON.stringify({ decision }),
+      });
+      setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
+    } catch (e) {
+      setLoadError(e.message);
+    }
+  }
+
+  // Менеджер решает оставить "зависшую" сделку — она перестаёт быть кандидатом на удаление
+  async function handleDismissStale(dealId) {
+    try {
+      const { deal: updated } = await api(`/deals/${dealId}/dismiss-stale`, { method: "PATCH" });
+      setDeals((prev) => prev.map((d) => (d.id === dealId ? updated : d)));
+    } catch (e) {
+      setLoadError(e.message);
+    }
+  }
+
+  // Полное удаление сделки — и вручную, и по подтверждению "зависшей"
+  async function handleDeleteDeal(dealId) {
+    if (!window.confirm("Удалить сделку безвозвратно? Это действие нельзя отменить.")) return;
+    try {
+      await api(`/deals/${dealId}`, { method: "DELETE" });
+      setDeals((prev) => {
+        const next = prev.filter((d) => d.id !== dealId);
+        if (activeId === dealId) setActiveId(next.length ? next[0].id : null);
+        return next;
+      });
     } catch (e) {
       setLoadError(e.message);
     }
@@ -266,7 +304,7 @@ export default function App() {
             const active = d.id === activeId;
             const stageLabel = STAGES.find((s) => s.key === d.current_state)?.label || d.current_state;
             return (
-              <button
+              <div
                 key={d.id}
                 onClick={() => setActiveId(d.id)}
                 style={{
@@ -284,7 +322,43 @@ export default function App() {
                   <span style={styles.dealSilent}>{d.days_silent} дн. молчания</span>
                 </div>
                 <span style={styles.dealStageTag}>{stageLabel}</span>
-              </button>
+
+                {d.is_experience_candidate && (
+                  <div style={styles.candidateRow} onClick={(e) => e.stopPropagation()}>
+                    <span style={styles.candidateLabel}>Сохранить как опыт?</span>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button
+                        style={styles.miniBtnConfirm}
+                        onClick={() => handleExperienceDecision(d.id, "confirmed")}
+                        aria-label="Подтвердить как опыт"
+                      >
+                        <i className="ti ti-check" aria-hidden="true" style={{ fontSize: 13 }} />
+                      </button>
+                      <button
+                        style={styles.miniBtnReject}
+                        onClick={() => handleExperienceDecision(d.id, "rejected")}
+                        aria-label="Отклонить"
+                      >
+                        <i className="ti ti-x" aria-hidden="true" style={{ fontSize: 13 }} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {d.is_stale_candidate && (
+                  <div style={styles.staleRow} onClick={(e) => e.stopPropagation()}>
+                    <span style={styles.staleLabel}>Нет активности 14+ дней</span>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button style={styles.miniBtnDelete} onClick={() => handleDeleteDeal(d.id)}>
+                        Удалить
+                      </button>
+                      <button style={styles.miniBtnKeep} onClick={() => handleDismissStale(d.id)}>
+                        Оставить
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -299,7 +373,17 @@ export default function App() {
               {deal.product || "—"} · {deal.deal_size ? `${Number(deal.deal_size).toLocaleString("ru-RU")} ₽` : "сумма не указана"} · {deal.days_silent} дн. без ответа
             </div>
           </div>
-          <CriteriaBulbs criteria={deal.criteria} />
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "18px" }}>
+            <CriteriaBulbs criteria={deal.criteria} />
+            <button
+              style={styles.deleteDealBtn}
+              onClick={() => handleDeleteDeal(deal.id)}
+              aria-label="Удалить сделку"
+              title="Удалить сделку"
+            >
+              <i className="ti ti-trash" aria-hidden="true" style={{ fontSize: 15 }} />
+            </button>
+          </div>
         </div>
 
         <div style={styles.stageBarScroll}>
@@ -415,10 +499,19 @@ const styles = {
   dealProduct: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "150px" },
   dealSilent: { flexShrink: 0 },
   dealStageTag: { fontSize: "10.5px", color: "#E8A33D", marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.04em" },
+  candidateRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", padding: "6px 8px", background: "rgba(111,168,136,0.1)", border: "1px solid rgba(111,168,136,0.3)", borderRadius: "5px" },
+  candidateLabel: { fontSize: "10.5px", color: "#6FA888" },
+  miniBtnConfirm: { width: "20px", height: "20px", borderRadius: "4px", background: "#6FA888", color: "#12241C", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+  miniBtnReject: { width: "20px", height: "20px", borderRadius: "4px", background: "transparent", color: "#9AA0AC", border: "1px solid #33353D", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
+  staleRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", padding: "6px 8px", background: "rgba(201,112,100,0.1)", border: "1px solid rgba(201,112,100,0.3)", borderRadius: "5px" },
+  staleLabel: { fontSize: "10.5px", color: "#C97064" },
+  miniBtnDelete: { fontSize: "10.5px", padding: "3px 8px", borderRadius: "4px", background: "#C97064", color: "#2B1613", border: "none", cursor: "pointer", fontWeight: 500 },
+  miniBtnKeep: { fontSize: "10.5px", padding: "3px 8px", borderRadius: "4px", background: "transparent", color: "#9AA0AC", border: "1px solid #33353D", cursor: "pointer" },
   main: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
   topBar: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 22px 12px", borderBottom: "1px solid #2E303A" },
   topBarClient: { fontSize: "16px", fontWeight: 500 },
   topBarMeta: { fontSize: "12px", color: "#8A8D97", marginTop: "2px" },
+  deleteDealBtn: { width: "26px", height: "26px", borderRadius: "6px", background: "transparent", border: "1px solid #33353D", color: "#9AA0AC", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
   bulbRow: { display: "flex", gap: "14px" },
   bulbItem: { display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" },
   bulb: { width: "9px", height: "9px", borderRadius: "50%" },
