@@ -19,7 +19,6 @@ const STATUS_COLOR = {
   "": "#33353D",
 };
 
-// Полная детализация state machine — 14 состояний, сгруппированы для горизонтального скролла полоски
 const STAGES = [
   { key: "INIT", label: "Старт" },
   { key: "COLLECTING", label: "Сбор данных" },
@@ -34,15 +33,11 @@ const STAGES = [
   { key: "FINAL_OUTPUT", label: "Итог сессии" },
 ];
 
-// Состояния, которые рендерятся как полноценный шаг в полоске,
-// но при этом не являются частью "счастливого пути" — это видно по цвету (янтарь вместо зелёного)
 const BRANCH_STATES = new Set(["SOPRANO_INTERVIEW", "CONFLICT_RESOLUTION", "ESCALATION"]);
-
-// LOST_DEAL и DISQUALIFICATION не получают отдельный экран — это другой стиль бабла в общем чате
 const TERMINAL_NEGATIVE_STATES = { LOST_DEAL: "lost", DISQUALIFICATION: "disqualified" };
 
 function stageIndex(stateKey) {
-  if (TERMINAL_NEGATIVE_STATES[stateKey]) return STAGES.length - 1; // визуально считать завершённым
+  if (TERMINAL_NEGATIVE_STATES[stateKey]) return STAGES.length - 1;
   const idx = STAGES.findIndex((s) => s.key === stateKey);
   return idx === -1 ? 0 : idx;
 }
@@ -56,7 +51,7 @@ function StageBar({ stateKey }) {
         const active = i === idx;
         const isBranch = BRANCH_STATES.has(s.key);
         let dotColor = "#33353D";
-        if (active) dotColor = isBranch ? "#E8A33D" : "#E8A33D";
+        if (active) dotColor = "#E8A33D";
         else if (done) dotColor = "#6FA888";
         return (
           <div key={s.key} style={styles.stageItem}>
@@ -151,6 +146,9 @@ async function api(path, options = {}) {
   return res.json();
 }
 
+const MIN_SIDEBAR_WIDTH = 200;
+const MAX_SIDEBAR_WIDTH = 520;
+
 export default function App() {
   const [deals, setDeals] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -160,9 +158,38 @@ export default function App() {
   const [loadError, setLoadError] = useState(null);
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "" });
+  const [sidebarWidth, setSidebarWidth] = useState(260);
   const scrollRef = useRef(null);
+  const appRef = useRef(null);
+  const resizingRef = useRef(false);
 
   const deal = deals.find((d) => d.id === activeId);
+
+  useEffect(() => {
+    function onMouseMove(e) {
+      if (!resizingRef.current || !appRef.current) return;
+      const left = appRef.current.getBoundingClientRect().left;
+      const newWidth = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, e.clientX - left));
+      setSidebarWidth(newWidth);
+    }
+    function onMouseUp() {
+      resizingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
+
+  function startResizing() {
+    resizingRef.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+  }
 
   const loadDeals = useCallback(async () => {
     try {
@@ -230,7 +257,6 @@ export default function App() {
     }
   }
 
-  // Менеджер подтверждает или отклоняет сделку как полезный опыт для агента
   async function handleExperienceDecision(dealId, decision) {
     try {
       const { deal: updated } = await api(`/deals/${dealId}/experience`, {
@@ -243,7 +269,6 @@ export default function App() {
     }
   }
 
-  // Менеджер решает оставить "зависшую" сделку — она перестаёт быть кандидатом на удаление
   async function handleDismissStale(dealId) {
     try {
       const { deal: updated } = await api(`/deals/${dealId}/dismiss-stale`, { method: "PATCH" });
@@ -253,7 +278,6 @@ export default function App() {
     }
   }
 
-  // Полное удаление сделки — и вручную, и по подтверждению "зависшей"
   async function handleDeleteDeal(dealId) {
     if (!window.confirm("Удалить сделку безвозвратно? Это действие нельзя отменить.")) return;
     try {
@@ -290,8 +314,8 @@ export default function App() {
   }
 
   return (
-    <div style={styles.app}>
-      <div style={styles.sidebar}>
+    <div style={styles.app} ref={appRef}>
+      <div style={{ ...styles.sidebar, width: sidebarWidth }}>
         <div style={styles.sidebarHeader}>
           <span style={styles.brandMark}>SC</span>
           <span style={styles.brandText}>Sales Closer</span>
@@ -317,11 +341,11 @@ export default function App() {
                   <span style={styles.dealClient}>{d.client}</span>
                   <span style={styles.dealSize}>{d.deal_size ? `${Math.round(d.deal_size / 1000)}к` : "—"}</span>
                 </div>
+                <div style={styles.dealProductFull}>{d.product || "—"}</div>
                 <div style={styles.dealItemBottom}>
-                  <span style={styles.dealProduct}>{d.product || "—"}</span>
+                  <span style={styles.dealStageTag}>{stageLabel}</span>
                   <span style={styles.dealSilent}>{d.days_silent} дн. молчания</span>
                 </div>
-                <span style={styles.dealStageTag}>{stageLabel}</span>
 
                 {d.is_experience_candidate && (
                   <div style={styles.candidateRow} onClick={(e) => e.stopPropagation()}>
@@ -364,6 +388,15 @@ export default function App() {
         </div>
         {showNewDeal && <NewDealForm form={newDealForm} setForm={setNewDealForm} onSubmit={handleCreateDeal} onCancel={() => setShowNewDeal(false)} />}
       </div>
+
+      <div
+        className="sc-resize-handle"
+        style={styles.resizeHandle}
+        onMouseDown={startResizing}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Изменить ширину списка сделок"
+      />
 
       <div style={styles.main}>
         <div style={styles.topBar}>
@@ -441,6 +474,7 @@ export default function App() {
         textarea::placeholder { color: #6B6E78; }
         textarea:focus { outline: none; border-color: #E8A33D !important; }
         button { font-family: inherit; }
+        .sc-resize-handle:hover { background: #3A3D47 !important; }
       `}</style>
     </div>
   );
@@ -485,20 +519,21 @@ function NewDealForm({ form, setForm, onSubmit, onCancel }) {
 
 const styles = {
   app: { display: "flex", height: "640px", width: "100%", background: "#1C1D22", color: "#EFECE6", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", borderRadius: "12px", overflow: "hidden", border: "1px solid #2E303A" },
-  sidebar: { width: "260px", flexShrink: 0, borderRight: "1px solid #2E303A", display: "flex", flexDirection: "column", background: "#1A1B20" },
+  sidebar: { flexShrink: 0, borderRight: "1px solid #2E303A", display: "flex", flexDirection: "column", background: "#1A1B20" },
+  resizeHandle: { width: "5px", flexShrink: 0, cursor: "col-resize", background: "transparent" },
   sidebarHeader: { display: "flex", alignItems: "center", gap: "10px", padding: "18px 18px 14px", borderBottom: "1px solid #2E303A" },
   brandMark: { width: "26px", height: "26px", borderRadius: "6px", background: "#E8A33D", color: "#412402", fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" },
   brandText: { fontSize: "14px", fontWeight: 500, letterSpacing: "0.02em", flex: 1 },
   addBtn: { width: "24px", height: "24px", borderRadius: "6px", background: "transparent", border: "1px solid #33353D", color: "#9AA0AC", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
   dealList: { flex: 1, overflowY: "auto", padding: "8px" },
-  dealItem: { display: "flex", flexDirection: "column", gap: "4px", width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: "6px", border: "none", cursor: "pointer", marginBottom: "2px", color: "#EFECE6" },
-  dealItemTop: { display: "flex", justifyContent: "space-between", alignItems: "baseline" },
+  dealItem: { display: "flex", flexDirection: "column", gap: "2px", width: "100%", textAlign: "left", padding: "10px 12px", borderRadius: "6px", border: "none", cursor: "pointer", marginBottom: "2px", color: "#EFECE6" },
+  dealItemTop: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "8px" },
   dealClient: { fontSize: "13.5px", fontWeight: 500 },
-  dealSize: { fontSize: "12px", color: "#9AA0AC" },
-  dealItemBottom: { display: "flex", justifyContent: "space-between", fontSize: "11.5px", color: "#7D808A" },
-  dealProduct: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "150px" },
+  dealSize: { fontSize: "12px", color: "#9AA0AC", flexShrink: 0 },
+  dealProductFull: { fontSize: "11.5px", color: "#7D808A", lineHeight: 1.4, whiteSpace: "normal", wordBreak: "break-word" },
+  dealItemBottom: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11.5px", color: "#7D808A", marginTop: "2px", gap: "8px" },
   dealSilent: { flexShrink: 0 },
-  dealStageTag: { fontSize: "10.5px", color: "#E8A33D", marginTop: "2px", textTransform: "uppercase", letterSpacing: "0.04em" },
+  dealStageTag: { fontSize: "10.5px", color: "#E8A33D", textTransform: "uppercase", letterSpacing: "0.04em" },
   candidateRow: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", padding: "6px 8px", background: "rgba(111,168,136,0.1)", border: "1px solid rgba(111,168,136,0.3)", borderRadius: "5px" },
   candidateLabel: { fontSize: "10.5px", color: "#6FA888" },
   miniBtnConfirm: { width: "20px", height: "20px", borderRadius: "4px", background: "#6FA888", color: "#12241C", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" },
