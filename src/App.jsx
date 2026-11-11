@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { getAccessToken, signOut } from "./supabase.js";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api"; // задаётся как VITE_API_BASE в Vercel
-const MANAGER_ID = "febece1a-2dd9-4905-aa2b-73ccf6c86989"; // временно, до подключения Supabase Auth UI
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api"; // задаётся как VITE_API_BASE в Netlify
 
 const CRITERIA = [
   { key: "financial", label: "Финансы" },
@@ -145,14 +145,20 @@ const BUBBLE_TAG = {
 };
 
 async function api(path, options = {}) {
+  const token = await getAccessToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "x-manager-id": MANAGER_ID,
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
   });
+  if (res.status === 401) {
+    // Сессия истекла или недействительна — возвращаем на экран входа.
+    await signOut();
+    throw new Error("Сессия истекла, войдите снова");
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Ошибка запроса: ${res.status}`);
@@ -335,6 +341,9 @@ export default function App() {
           <span style={styles.brandText}>Sales Closer</span>
           <button style={styles.addBtn} onClick={() => setShowNewDeal(true)} aria-label="Новая сделка">
             <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 16 }} />
+          </button>
+          <button style={styles.addBtn} onClick={signOut} aria-label="Выйти" title="Выйти">
+            <i className="ti ti-logout" aria-hidden="true" style={{ fontSize: 15 }} />
           </button>
         </div>
         <div style={styles.dealList}>
