@@ -174,6 +174,17 @@ export default function App() {
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
+  const inputRef = useRef(null);
+  // Поле ввода растёт вместе с текстом — до 40% высоты окна, дальше прокрутка.
+  // Так вставленную переписку можно проверить целиком до отправки.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const max = Math.round(window.innerHeight * 0.4);
+    el.style.height = `${Math.min(el.scrollHeight + 2, max)}px`;
+    el.style.overflowY = el.scrollHeight + 2 > max ? "auto" : "hidden";
+  }, [input]);
   const [thinking, setThinking] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [showNewDeal, setShowNewDeal] = useState(false);
@@ -474,6 +485,7 @@ export default function App() {
 
         <div style={styles.inputBar}>
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -484,7 +496,7 @@ export default function App() {
             }}
             placeholder="Опишите ситуацию по сделке или вставьте переписку…"
             style={styles.textarea}
-            rows={2}
+            rows={3}
           />
           <button onClick={handleSend} disabled={thinking} style={styles.sendBtn}>
             <i className="ti ti-arrow-right" aria-hidden="true" style={{ fontSize: 18 }} />
@@ -494,6 +506,7 @@ export default function App() {
 
       <style>{`
         @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+        html, body { margin: 0; background: #1C1D22; }
         textarea::placeholder { color: #6B6E78; }
         textarea:focus { outline: none; border-color: #E8A33D !important; }
         button { font-family: inherit; }
@@ -552,7 +565,7 @@ function NewDealForm({ form, setForm, onSubmit, onCancel }) {
 }
 
 const styles = {
-  app: { display: "flex", height: "640px", width: "100%", background: "#1C1D22", color: "#EFECE6", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", borderRadius: "12px", overflow: "hidden", border: "1px solid #2E303A" },
+  app: { display: "flex", height: "100vh", width: "100%", background: "#1C1D22", color: "#EFECE6", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", overflow: "hidden" },
   sidebar: { flexShrink: 0, borderRight: "1px solid #2E303A", display: "flex", flexDirection: "column", background: "#1A1B20" },
   resizeHandle: { width: "5px", flexShrink: 0, cursor: "col-resize", background: "transparent" },
   sidebarHeader: { display: "flex", alignItems: "center", gap: "10px", padding: "18px 18px 14px", borderBottom: "1px solid #2E303A" },
@@ -598,7 +611,7 @@ const styles = {
   typingDots: { display: "inline-flex", gap: "4px" },
   dot: { width: "5px", height: "5px", borderRadius: "50%", background: "#8A8D97", display: "inline-block", animation: "blink 1.2s infinite" },
   inputBar: { display: "flex", gap: "10px", padding: "14px 22px 18px", borderTop: "1px solid #2E303A", alignItems: "flex-end" },
-  textarea: { flex: 1, resize: "none", background: "#24262D", border: "1px solid #33353D", borderRadius: "8px", padding: "9px 12px", color: "#EFECE6", fontSize: "13.5px", fontFamily: "inherit" },
+  textarea: { flex: 1, resize: "none", background: "#24262D", border: "1px solid #33353D", borderRadius: "8px", padding: "9px 12px", color: "#EFECE6", fontSize: "13.5px", lineHeight: 1.5, fontFamily: "inherit", minHeight: "64px", boxSizing: "border-box" },
   sendBtn: { width: "36px", height: "36px", borderRadius: "8px", background: "#E8A33D", color: "#1C1D22", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
   newDealPanel: { display: "flex", flexDirection: "column", gap: "8px", padding: "12px", borderTop: "1px solid #2E303A" },
   newDealInput: { background: "#24262D", border: "1px solid #33353D", borderRadius: "6px", padding: "7px 10px", color: "#EFECE6", fontSize: "12.5px" },
