@@ -189,7 +189,7 @@ export default function App() {
   const [thinking, setThinking] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [showNewDeal, setShowNewDeal] = useState(false);
-  const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage" });
+  const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage", client_deadline: "", production_days: "", install_days_min: "", install_days_max: "" });
   const [sidebarWidth, setSidebarWidth] = useState(260);
   const scrollRef = useRef(null);
   const appRef = useRef(null);
@@ -283,10 +283,20 @@ export default function App() {
       setDeals((prev) => [deal, ...prev]);
       setActiveId(deal.id);
       setShowNewDeal(false);
-      setNewDealForm({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage" });
+      setNewDealForm({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage", client_deadline: "", production_days: "", install_days_min: "", install_days_max: "" });
     } catch (e) {
       setLoadError(e.message);
     }
+  }
+
+  // Сроки сделки: дата клиента, производство, монтаж (считает бэкенд, engine/timeline.js)
+  async function handleSaveTimeline(dealId, fields) {
+    const { deal: updated } = await api(`/deals/${dealId}/timeline`, {
+      method: "PATCH",
+      body: JSON.stringify(fields),
+    });
+    setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, ...updated } : d)));
+    return updated;
   }
 
   async function handleExperienceDecision(dealId, decision) {
@@ -440,6 +450,7 @@ export default function App() {
             <div style={styles.topBarMeta}>
               {deal.product || "—"} · {deal.deal_size ? `${Number(deal.deal_size).toLocaleString("ru-RU")} ₽` : "сумма не указана"} · {deal.days_silent} дн. без ответа
             </div>
+            <TimelineEditor deal={deal} onSave={handleSaveTimeline} />
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "18px" }}>
             <CriteriaBulbs criteria={deal.criteria} />
@@ -518,6 +529,80 @@ export default function App() {
   );
 }
 
+// Поля сроков. Пустые поля не отправляются: без даты клиента и срока
+// производства Клоузер просто не называет даты готовности.
+function TimelineFields({ form, setForm }) {
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <label style={styles.timelineLabel}>
+        Нужно клиенту к (день открытия)
+        <input style={styles.newDealInput} type="date" value={form.client_deadline || ""} onChange={set("client_deadline")} />
+      </label>
+      <input style={styles.newDealInput} type="number" min="1" placeholder="Производство, рабочих дней" value={form.production_days || ""} onChange={set("production_days")} />
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <span style={styles.timelineLabel}>Монтаж, раб. дней:</span>
+        <input style={{ ...styles.newDealInput, width: 56 }} type="number" min="0" placeholder="2" value={form.install_days_min ?? ""} onChange={set("install_days_min")} />
+        <span style={styles.timelineLabel}>–</span>
+        <input style={{ ...styles.newDealInput, width: 56 }} type="number" min="0" placeholder="3" value={form.install_days_max ?? ""} onChange={set("install_days_max")} />
+      </div>
+    </div>
+  );
+}
+
+function shortDate(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+// Сроки в шапке сделки: показать и изменить.
+function TimelineEditor({ deal, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({});
+  const [error, setError] = useState("");
+  const has = deal.client_deadline && deal.production_days;
+  const iMin = deal.install_days_min ?? 2;
+  const iMax = deal.install_days_max ?? 3;
+  function start() {
+    setForm({
+      client_deadline: deal.client_deadline || "",
+      production_days: deal.production_days || "",
+      install_days_min: deal.install_days_min ?? "",
+      install_days_max: deal.install_days_max ?? "",
+    });
+    setError("");
+    setOpen(true);
+  }
+  async function save() {
+    try {
+      await onSave(deal.id, form);
+      setOpen(false);
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+  return (
+    <div style={{ marginTop: 4 }}>
+      <button style={styles.timelineLink} onClick={open ? () => setOpen(false) : start}>
+        {has
+          ? `Сроки: к ${shortDate(deal.client_deadline)} · производство ${deal.production_days} · монтаж ${iMin === iMax ? iMin : `${iMin}–${iMax}`} раб. дн.`
+          : "Сроки не заданы — указать"}
+      </button>
+      {open && (
+        <div style={{ ...styles.newDealPanel, maxWidth: 320, borderTop: "none", padding: "8px 0" }}>
+          <TimelineFields form={form} setForm={setForm} />
+          {error && <div style={{ color: "#D9826F", fontSize: 12 }}>{error}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button style={styles.newDealBtn} onClick={save}>Сохранить</button>
+            <button style={styles.cancelBtn} onClick={() => setOpen(false)}>Отмена</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function NewDealForm({ form, setForm, onSubmit, onCancel }) {
   return (
     <div style={styles.newDealPanel}>
@@ -547,6 +632,7 @@ function NewDealForm({ form, setForm, onSubmit, onCancel }) {
         value={form.days_silent}
         onChange={(e) => setForm({ ...form, days_silent: e.target.value })}
       />
+      <TimelineFields form={form} setForm={setForm} />
       <select
         style={styles.newDealInput}
         value={form.industry || "signage"}
@@ -616,6 +702,8 @@ const styles = {
   textarea: { flex: 1, resize: "none", background: "#24262D", border: "1px solid #33353D", borderRadius: "8px", padding: "9px 12px", color: "#EFECE6", fontSize: "13.5px", lineHeight: 1.5, fontFamily: "inherit", minHeight: "64px", boxSizing: "border-box" },
   sendBtn: { width: "36px", height: "36px", borderRadius: "8px", background: "#E8A33D", color: "#1C1D22", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
   newDealPanel: { display: "flex", flexDirection: "column", gap: "8px", padding: "12px", borderTop: "1px solid #2E303A" },
+  timelineLabel: { display: "flex", flexDirection: "column", gap: 4, color: "#9A9CA5", fontSize: "11.5px" },
+  timelineLink: { background: "none", border: "none", padding: 0, color: "#E8A33D", fontSize: "12px", cursor: "pointer", textAlign: "left" },
   newDealInput: { background: "#24262D", border: "1px solid #33353D", borderRadius: "6px", padding: "7px 10px", color: "#EFECE6", fontSize: "12.5px" },
   newDealBtn: { flex: 1, background: "#E8A33D", color: "#1C1D22", border: "none", borderRadius: "6px", padding: "8px", fontSize: "12.5px", fontWeight: 500, cursor: "pointer" },
   cancelBtn: { flex: 1, background: "transparent", color: "#9AA0AC", border: "1px solid #33353D", borderRadius: "6px", padding: "8px", fontSize: "12.5px", cursor: "pointer" },
