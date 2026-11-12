@@ -537,7 +537,8 @@ function TimelineFields({ form, setForm }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label style={styles.timelineLabel}>
         Нужно клиенту к (день открытия)
-        <input style={styles.newDealInput} type="date" value={form.client_deadline || ""} onChange={set("client_deadline")} />
+        <input style={styles.newDealInput} type="date" min={new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" })} value={form.client_deadline || ""} onChange={set("client_deadline")} />
+        {form.client_deadline && <span style={{ color: "#E8A33D" }}>= {shortDate(form.client_deadline)} {form.client_deadline.slice(0, 4)}</span>}
       </label>
       <input style={styles.newDealInput} type="number" min="1" placeholder="Производство, рабочих дней" value={form.production_days || ""} onChange={set("production_days")} />
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
