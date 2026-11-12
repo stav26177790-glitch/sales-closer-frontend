@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { getAccessToken, signOut } from "./supabase.js";
+import RichText from "./RichText.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api"; // задаётся как VITE_API_BASE в Netlify
 
@@ -463,9 +464,10 @@ export default function App() {
             const tag = BUBBLE_TAG[variant];
             return (
               <div key={i} style={{ ...styles.bubbleRow, justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-                <div style={{ ...styles.bubble, ...BUBBLE_STYLES[variant], whiteSpace: "pre-line" }}>
+                <div style={{ ...styles.bubble, ...BUBBLE_STYLES[variant], whiteSpace: m.role === "user" ? "pre-line" : "normal" }}>
                   {tag && <div style={styles.bubbleTag}>{tag}</div>}
-                  {m.content}
+                  {/* Ответы Клоузера — с разметкой; сообщения менеджера — как есть. */}
+                  {m.role === "user" ? m.content : <RichText text={m.content} />}
                 </div>
               </div>
             );
