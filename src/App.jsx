@@ -194,6 +194,7 @@ export default function App() {
   }, [input]);
   const [thinking, setThinking] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [notice, setNotice] = useState("");
   const [showNewDeal, setShowNewDeal] = useState(false);
   const [newDealForm, setNewDealForm] = useState({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage", client_deadline: "", production_days: "", install_days_min: "", install_days_max: "" });
   const [sidebarWidth, setSidebarWidth] = useState(260);
@@ -244,6 +245,25 @@ export default function App() {
     loadDeals();
   }, []);
 
+  // Клоузер обновился, а вкладка открыта давно — предлагаем обновить страницу.
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
+    async function check() {
+      try {
+        const res = await fetch(`/version.json?t=${Date.now()}`, { cache: "no-store" });
+        const { build } = await res.json();
+        if (build && build !== __BUILD_ID__) setUpdateReady(true);
+      } catch {
+        /* нет сети — проверим позже */
+      }
+    }
+    const timer = setInterval(check, 5 * 60 * 1000);
+    window.addEventListener("focus", check);
+    check();
+    return () => { clearInterval(timer); window.removeEventListener("focus", check); };
+  }, []);
+
   useEffect(() => {
     if (!activeId) return;
     api(`/deals/${activeId}/history`)
@@ -288,6 +308,10 @@ export default function App() {
       });
       setDeals((prev) => [deal, ...prev]);
       setActiveId(deal.id);
+      // Сроки ввели, а сервер их не сохранил — сразу говорим, а не молча.
+      if (newDealForm.client_deadline && newDealForm.production_days && !(deal.client_deadline && deal.production_days)) {
+        setNotice("Сроки не сохранились при создании сделки — укажите их через «Сроки» в шапке сделки.");
+      }
       setShowNewDeal(false);
       setNewDealForm({ client: "", product: "", deal_size: "", days_silent: "", industry: "signage", client_deadline: "", production_days: "", install_days_min: "", install_days_max: "" });
     } catch (e) {
@@ -302,9 +326,15 @@ export default function App() {
       body: JSON.stringify(fields),
     });
     setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, ...updated } : d)));
-    // Бэкенд сразу пишет в чат расчёт сроков — показываем его без перезагрузки.
-    if (message && dealId === activeId) {
-      setMessages((prev) => [...prev, { role: "agent", content: message, state: updated.current_state }]);
+    // Бэкенд сразу пишет в чат расчёт сроков — перечитываем историю с сервера
+    // (источник правды), а не только добавляем ответ локально.
+    if (dealId === activeId) {
+      try {
+        const { messages: fresh } = await api(`/deals/${dealId}/history`);
+        setMessages(fresh);
+      } catch {
+        if (message) setMessages((prev) => [...prev, { role: "agent", content: message, state: updated.current_state }]);
+      }
     }
     return updated;
   }
@@ -454,6 +484,18 @@ export default function App() {
       />
 
       <div style={styles.main}>
+        {updateReady && (
+          <div style={styles.banner}>
+            Клоузер обновился.
+            <button style={styles.bannerBtn} onClick={() => window.location.reload()}>Обновить страницу</button>
+          </div>
+        )}
+        {notice && (
+          <div style={styles.banner}>
+            {notice}
+            <button style={styles.bannerBtn} onClick={() => setNotice("")}>Понятно</button>
+          </div>
+        )}
         <div style={styles.topBar}>
           <div>
             <div style={styles.topBarClient}>{deal.client}</div>
@@ -689,6 +731,8 @@ const styles = {
   miniBtnDelete: { fontSize: "10.5px", padding: "3px 8px", borderRadius: "4px", background: "#C97064", color: "#2B1613", border: "none", cursor: "pointer", fontWeight: 500 },
   miniBtnKeep: { fontSize: "10.5px", padding: "3px 8px", borderRadius: "4px", background: "transparent", color: "#9AA0AC", border: "1px solid #33353D", cursor: "pointer" },
   main: { flex: 1, display: "flex", flexDirection: "column", minWidth: 0 },
+  banner: { display: "flex", alignItems: "center", gap: 12, padding: "8px 22px", background: "rgba(232,163,61,0.12)", borderBottom: "1px solid rgba(232,163,61,0.35)", color: "#E8A33D", fontSize: "13px" },
+  bannerBtn: { background: "#E8A33D", color: "#412402", border: "none", borderRadius: 5, padding: "4px 10px", fontSize: "12px", fontWeight: 500, cursor: "pointer" },
   topBar: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 22px 12px", borderBottom: "1px solid #2E303A" },
   topBarClient: { fontSize: "16px", fontWeight: 500 },
   topBarMeta: { fontSize: "12px", color: "#8A8D97", marginTop: "2px" },
