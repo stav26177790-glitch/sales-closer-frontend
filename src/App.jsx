@@ -169,7 +169,9 @@ async function api(path, options = {}) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || "Сервис временно недоступен. Попробуйте через минуту.");
+    const err = new Error(body.error || "Сервис временно недоступен. Попробуйте через минуту.");
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -194,6 +196,12 @@ export default function App() {
     el.style.overflowY = el.scrollHeight + 2 > max ? "auto" : "hidden";
   }, [input]);
   const [thinking, setThinking] = useState(false);
+  // Ход в фоне: на какой сделке он идёт, что Клоузер делает сейчас и сколько уже идёт.
+  const [jobDealId, setJobDealId] = useState(null);
+  const [stage, setStage] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  const pollingRef = useRef(new Set());
+  const activeIdRef = useRef(null);
   const [loadError, setLoadError] = useState(null);
   const [notice, setNotice] = useState("");
   const [showNewDeal, setShowNewDeal] = useState(false);
@@ -266,11 +274,60 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    activeIdRef.current = activeId;
     if (!activeId) return;
     api(`/deals/${activeId}/history`)
       .then(({ messages }) => setMessages(messages))
       .catch((e) => setLoadError(e.message));
+    // Если по сделке уже идёт ход (страницу обновили во время ожидания) — продолжаем следить.
+    api(`/deals/${activeId}/job`)
+      .then((j) => { if (j.status === "running") pollJob(activeId); })
+      .catch(() => {});
   }, [activeId]);
+
+  // Следим за ходом в фоне: этап и время — раз в 2,5 секунды; готово — показываем ответ.
+  async function pollJob(dealId) {
+    if (pollingRef.current.has(dealId)) return;
+    pollingRef.current.add(dealId);
+    setJobDealId(dealId);
+    setThinking(true);
+    try {
+      for (;;) {
+        let j;
+        try {
+          j = await api(`/deals/${dealId}/job`);
+        } catch (e) {
+          if (e.status === 404) {
+            if (activeIdRef.current === dealId) {
+              const { messages: fresh } = await api(`/deals/${dealId}/history`).catch(() => ({ messages: null }));
+              if (fresh) setMessages(fresh);
+              setMessages((prev) => [...prev, { role: "agent", content: "Ход прервался — сервер обновлялся. Если ответа выше нет, отправьте сообщение ещё раз.", state: "ERROR" }]);
+            }
+            return;
+          }
+          await new Promise((r) => setTimeout(r, 4000)); // нет связи — пробуем снова
+          continue;
+        }
+        if (activeIdRef.current === dealId) { setStage(j.stage || ""); setElapsed(j.elapsed_sec || 0); }
+        if (j.status === "done") {
+          if (activeIdRef.current === dealId) setMessages((prev) => [...prev, { role: "agent", content: j.reply, state: j.state }]);
+          if (j.deal) setDeals((prev) => prev.map((d) => (d.id === dealId ? j.deal : d)));
+          return;
+        }
+        if (j.status === "error") {
+          if (activeIdRef.current === dealId) setMessages((prev) => [...prev, { role: "agent", content: `Ошибка: ${j.error}`, state: "ERROR" }]);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    } finally {
+      pollingRef.current.delete(dealId);
+      setJobDealId((cur) => (cur === dealId ? null : cur));
+      setThinking(false);
+      setStage("");
+      setElapsed(0);
+    }
+  }
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -282,16 +339,24 @@ export default function App() {
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text, state: deal?.current_state }]);
     setThinking(true);
+    const dealId = activeId;
     try {
-      const { deal: updatedDeal, reply, state } = await api(`/deals/${activeId}/continue`, {
+      const r = await api(`/deals/${dealId}/continue`, {
         method: "POST",
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, async: true }),
       });
-      setMessages((prev) => [...prev, { role: "agent", content: reply, state }]);
-      setDeals((prev) => prev.map((d) => (d.id === activeId ? updatedDeal : d)));
+      if (r.job) {
+        // Ход идёт в фоне — следим за этапами.
+        setStage(r.job.stage || "");
+        pollJob(dealId);
+        return;
+      }
+      // Старый сервер ответил сразу.
+      setMessages((prev) => [...prev, { role: "agent", content: r.reply, state: r.state }]);
+      setDeals((prev) => prev.map((d) => (d.id === dealId ? r.deal : d)));
+      setThinking(false);
     } catch (e) {
       setMessages((prev) => [...prev, { role: "agent", content: `Ошибка: ${e.message}`, state: "ERROR" }]);
-    } finally {
       setThinking(false);
     }
   }
@@ -536,7 +601,7 @@ export default function App() {
               </div>
             );
           })}
-          {thinking && (
+          {thinking && (!jobDealId || jobDealId === activeId) && (
             <div style={{ ...styles.bubbleRow, justifyContent: "flex-start" }}>
               <div style={{ ...styles.bubble, ...BUBBLE_STYLES.agent }}>
                 <span style={styles.typingDots}>
@@ -544,11 +609,15 @@ export default function App() {
                   <span style={{ ...styles.dot, animationDelay: "0.15s" }} />
                   <span style={{ ...styles.dot, animationDelay: "0.3s" }} />
                 </span>
-                {["STRATEGY_SELECTION", "COMPOSING", "REVIEWING", "ESCALATION"].includes(deal?.current_state) && (
-                  <div style={{ fontSize: 12, color: "#8A8D97", marginTop: 6 }}>
-                    Составляю касания, проверяю и при необходимости дорабатываю — это может занять 2–4 минуты.
+                {stage && (
+                  <div style={{ fontSize: 13, color: "#C9CCD3", marginTop: 6 }}>
+                    {stage}
+                    {elapsed > 0 && <span style={{ color: "#7D808A" }}> · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}</span>}
                   </div>
                 )}
+                <div style={{ fontSize: 11.5, color: "#7D808A", marginTop: 4 }}>
+                  Можно закрыть страницу — ответ сохранится в сделке.
+                </div>
               </div>
             </div>
           )}
