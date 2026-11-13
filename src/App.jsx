@@ -297,11 +297,15 @@ export default function App() {
 
   // Сроки сделки: дата клиента, производство, монтаж (считает бэкенд, engine/timeline.js)
   async function handleSaveTimeline(dealId, fields) {
-    const { deal: updated } = await api(`/deals/${dealId}/timeline`, {
+    const { deal: updated, message } = await api(`/deals/${dealId}/timeline`, {
       method: "PATCH",
       body: JSON.stringify(fields),
     });
     setDeals((prev) => prev.map((d) => (d.id === dealId ? { ...d, ...updated } : d)));
+    // Бэкенд сразу пишет в чат расчёт сроков — показываем его без перезагрузки.
+    if (message && dealId === activeId) {
+      setMessages((prev) => [...prev, { role: "agent", content: message, state: updated.current_state }]);
+    }
     return updated;
   }
 
