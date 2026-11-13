@@ -291,6 +291,7 @@ export default function App() {
     pollingRef.current.add(dealId);
     setJobDealId(dealId);
     setThinking(true);
+    let partsSeen = 0;
     try {
       for (;;) {
         let j;
@@ -309,6 +310,14 @@ export default function App() {
           continue;
         }
         if (activeIdRef.current === dealId) { setStage(j.stage || ""); setElapsed(j.elapsed_sec || 0); }
+        // Путь по частям (оценка → стратегия → касания): новая часть готова — подгружаем чат.
+        if ((j.parts || 0) > partsSeen || (j.status === "done" && partsSeen > 0)) {
+          partsSeen = j.parts || 0;
+          const h = await api(`/deals/${dealId}/history`).catch(() => null);
+          if (h && activeIdRef.current === dealId) setMessages(h.messages);
+          if (h?.deal) setDeals((prev) => prev.map((d) => (d.id === dealId ? h.deal : d)));
+          if (j.status === "done") return;
+        }
         if (j.status === "done") {
           if (activeIdRef.current === dealId) setMessages((prev) => [...prev, { role: "agent", content: j.reply, state: j.state }]);
           if (j.deal) setDeals((prev) => prev.map((d) => (d.id === dealId ? j.deal : d)));
