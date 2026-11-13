@@ -147,14 +147,20 @@ const BUBBLE_TAG = {
 
 async function api(path, options = {}) {
   const token = await getAccessToken();
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(options.headers || {}),
+      },
+    });
+  } catch {
+    // Сервер не ответил (просыпается, нет интернета) — Safari пишет «Load failed».
+    throw new Error("Нет связи с сервером. Проверьте интернет и попробуйте через минуту.");
+  }
   if (res.status === 401) {
     // Сессия истекла или недействительна — возвращаем на экран входа.
     await signOut();
@@ -162,7 +168,7 @@ async function api(path, options = {}) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Ошибка запроса: ${res.status}`);
+    throw new Error(body.error || "Сервис временно недоступен. Попробуйте через минуту.");
   }
   return res.json();
 }
