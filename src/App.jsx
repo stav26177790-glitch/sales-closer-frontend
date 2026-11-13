@@ -4,12 +4,13 @@ import RichText from "./RichText.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api"; // задаётся как VITE_API_BASE в Netlify
 
+// Формула закрытия владельца: ФВ, ОП, ЛПР, Д, ЗС (ключи в данных прежние).
 const CRITERIA = [
-  { key: "financial", label: "Финансы" },
-  { key: "need", label: "Потребность" },
-  { key: "trust", label: "Доверие" },
-  { key: "authority", label: "ЛПР" },
-  { key: "urgency", label: "Срочность" },
+  { key: "financial", label: "ФВ", full: "Финансовая возможность" },
+  { key: "need", label: "ОП", full: "Осознанная потребность" },
+  { key: "authority", label: "ЛПР", full: "ЛПР определён" },
+  { key: "trust", label: "Д", full: "Доверие" },
+  { key: "urgency", label: "ЗС", full: "Здесь и сейчас — готов запускать в работу" },
 ];
 
 const INDUSTRY_OPTIONS = [
@@ -37,8 +38,8 @@ const STATUS_COLOR = {
 const STAGES = [
   { key: "INIT", label: "Старт" },
   { key: "COLLECTING", label: "Сбор данных" },
-  { key: "SOPRANO_INTERVIEW", label: "Уточнения СОПРАНО" },
-  { key: "DIAGNOSING", label: "Диагностика" },
+  { key: "SOPRANO_INTERVIEW", label: "Уточнения" },
+  { key: "DIAGNOSING", label: "Формула закрытия" },
   { key: "CONFLICT_RESOLUTION", label: "Расхождение оценок" },
   { key: "STRATEGY_SELECTION", label: "Стратегия" },
   { key: "COMPOSING", label: "Составление касания" },
@@ -104,7 +105,7 @@ function CriteriaBulbs({ criteria }) {
         const status = criteria?.[c.key] || "";
         const color = STATUS_COLOR[status] || STATUS_COLOR[""];
         return (
-          <div key={c.key} style={styles.bulbItem} title={status || "не оценено"}>
+          <div key={c.key} style={styles.bulbItem} title={`${c.full}: ${status || "не оценено"}`}>
             <div
               style={{
                 ...styles.bulb,
