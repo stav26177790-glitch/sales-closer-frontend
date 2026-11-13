@@ -543,6 +543,11 @@ export default function App() {
                   <span style={{ ...styles.dot, animationDelay: "0.15s" }} />
                   <span style={{ ...styles.dot, animationDelay: "0.3s" }} />
                 </span>
+                {["STRATEGY_SELECTION", "COMPOSING", "REVIEWING", "ESCALATION"].includes(deal?.current_state) && (
+                  <div style={{ fontSize: 12, color: "#8A8D97", marginTop: 6 }}>
+                    Составляю касания, проверяю и при необходимости дорабатываю — это может занять 2–4 минуты.
+                  </div>
+                )}
               </div>
             </div>
           )}
