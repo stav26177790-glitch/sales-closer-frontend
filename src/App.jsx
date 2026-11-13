@@ -361,6 +361,21 @@ export default function App() {
     }
   }
 
+  // Выгрузка ответов агентов сделки (таблица agent_calls) — файлом для разработчика.
+  async function downloadAgentCalls(d) {
+    try {
+      const data = await api(`/deals/${d.id}/agent-calls`);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `klouzer_${(d.client || "deal").replace(/[^\wА-Яа-яЁё-]+/g, "_")}_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    } catch (e) {
+      setNotice(`Не удалось выгрузить данные: ${e.message}`);
+    }
+  }
+
   async function handleCreateDeal() {
     if (!newDealForm.client.trim()) return;
     try {
@@ -569,6 +584,10 @@ export default function App() {
               {deal.product || "—"} · {deal.deal_size ? `${Number(deal.deal_size).toLocaleString("ru-RU")} ₽` : "сумма не указана"} · {deal.days_silent} дн. без ответа
             </div>
             <TimelineEditor deal={deal} onSave={handleSaveTimeline} />
+            <button style={{ ...styles.timelineLink, color: "#6E717B", fontSize: 11.5 }} onClick={() => downloadAgentCalls(deal)}
+              title="Ответы агентов по этой сделке — разработчик проверит на них правки без новых прогонов">
+              Данные для разработчика ⤓
+            </button>
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "18px" }}>
             <CriteriaBulbs criteria={deal.criteria} />
