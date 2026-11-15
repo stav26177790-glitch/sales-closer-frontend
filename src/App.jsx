@@ -392,6 +392,7 @@ export default function App() {
         method: "POST",
         body: JSON.stringify({
           ...newDealForm,
+          client_deadline: parseClientDate(newDealForm.client_deadline) || "",
           deal_size: Number(newDealForm.deal_size) || 0,
           days_silent: Number(newDealForm.days_silent) || 0,
         }),
@@ -399,7 +400,7 @@ export default function App() {
       setDeals((prev) => [deal, ...prev]);
       setActiveId(deal.id);
       // Сроки ввели, а сервер их не сохранил — сразу говорим, а не молча.
-      if (newDealForm.client_deadline && newDealForm.production_days && !(deal.client_deadline && deal.production_days)) {
+      if ((newDealForm.client_deadline || newDealForm.production_days) && !(deal.client_deadline && deal.production_days)) {
         setNotice("Сроки не сохранились при создании сделки — укажите их через «Сроки» в шапке сделки.");
       }
       setShowNewDeal(false);
@@ -692,8 +693,10 @@ function TimelineFields({ form, setForm }) {
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <label style={styles.timelineLabel}>
         Нужно клиенту к (день открытия)
-        <input style={styles.newDealInput} type="date" min={new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" })} value={form.client_deadline || ""} onChange={set("client_deadline")} />
-        {form.client_deadline && <span style={{ color: "#E8A33D" }}>= {shortDate(form.client_deadline)} {form.client_deadline.slice(0, 4)}</span>}
+        <input style={styles.newDealInput} type="text" inputMode="numeric" placeholder="дд.мм.гггг, например 01.12.2026" value={form.client_deadline || ""} onChange={set("client_deadline")} />
+        {form.client_deadline && (parseClientDate(form.client_deadline)
+          ? <span style={{ color: "#E8A33D" }}>= {shortDate(parseClientDate(form.client_deadline))} {parseClientDate(form.client_deadline).slice(0, 4)}</span>
+          : <span style={{ color: "#D9826F" }}>Не понял дату — напишите так: 01.12.2026</span>)}
       </label>
       <input style={styles.newDealInput} type="number" min="1" placeholder="Производство, рабочих дней" value={form.production_days || ""} onChange={set("production_days")} />
       <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -704,6 +707,27 @@ function TimelineFields({ form, setForm }) {
       </div>
     </div>
   );
+}
+
+// Дата клиента: «01.12.2026», «1.12.26», «1.12» (без года — ближайшее будущее) или «2026-12-01».
+// Раньше было поле-календарик: в браузере набранная вручную дата молча терялась (живой «Зерно 9», 15.11).
+// Та же логика — на бэкенде, engine/clientDate.js.
+function parseClientDate(v) {
+  const s = String(v || "").trim();
+  let y, m, d, r;
+  if ((r = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [y, m, d] = [r[1], r[2], r[3]].map(Number);
+  else if ((r = s.match(/^(\d{1,2})[./](\d{1,2})(?:[./](\d{2}|\d{4}))?$/))) {
+    d = Number(r[1]); m = Number(r[2]);
+    if (r[3]) y = r[3].length === 2 ? 2000 + Number(r[3]) : Number(r[3]);
+    else {
+      const now = new Date();
+      y = now.getFullYear();
+      if (Date.UTC(y, m - 1, d) < Date.UTC(y, now.getMonth(), now.getDate())) y += 1;
+    }
+  } else return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
 function shortDate(iso) {
@@ -722,7 +746,7 @@ function TimelineEditor({ deal, onSave }) {
   const iMax = deal.install_days_max ?? 3;
   function start() {
     setForm({
-      client_deadline: deal.client_deadline || "",
+      client_deadline: deal.client_deadline ? deal.client_deadline.split("-").reverse().join(".") : "",
       production_days: deal.production_days || "",
       install_days_min: deal.install_days_min ?? "",
       install_days_max: deal.install_days_max ?? "",
@@ -731,8 +755,10 @@ function TimelineEditor({ deal, onSave }) {
     setOpen(true);
   }
   async function save() {
+    if (form.client_deadline && !parseClientDate(form.client_deadline)) { setError("Не понял дату — напишите так: 01.12.2026"); return; }
+    if (!form.client_deadline && form.production_days) { setError("Укажите дату, к которой нужно клиенту, например 01.12.2026"); return; }
     try {
-      await onSave(deal.id, form);
+      await onSave(deal.id, { ...form, client_deadline: parseClientDate(form.client_deadline) || "" });
       setOpen(false);
     } catch (e) {
       setError(e.message);
