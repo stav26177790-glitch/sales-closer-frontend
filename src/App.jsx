@@ -342,10 +342,10 @@ export default function App() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, thinking]);
 
-  async function handleSend() {
-    if (!input.trim() || thinking || !activeId) return;
-    const text = input.trim();
-    setInput("");
+  async function handleSend(preset) {
+    const text = (typeof preset === "string" ? preset : input).trim();
+    if (!text || thinking || !activeId) return;
+    if (typeof preset !== "string") setInput("");
     setMessages((prev) => [...prev, { role: "user", content: text, state: deal?.current_state }]);
     setThinking(true);
     const dealId = activeId;
@@ -652,6 +652,21 @@ export default function App() {
           )}
         </div>
 
+        {/* Режим пути (владелец 15.11): идёт разговор — следующий шаг; клиент молчит — весь путь. */}
+        {deal?.current_state === "COMPOSING" && !thinking && (deal?.path_mode || deal?.last_diagnostic_output?._path_mode) && (
+          <div style={{ display: "flex", gap: 8, padding: "6px 16px 0", flexWrap: "wrap" }}>
+            {(deal.path_mode || deal.last_diagnostic_output?._path_mode) === "step" ? (
+              <button style={styles.modeBtn} onClick={() => handleSend("клиент молчит")}>
+                Клиент молчит — построить весь путь
+              </button>
+            ) : (
+              <button style={styles.modeBtn} onClick={() => handleSend("следующий шаг")}>
+                Клиент ответил — только следующий шаг
+              </button>
+            )}
+          </div>
+        )}
+
         <div style={styles.inputBar}>
           <textarea
             ref={inputRef}
@@ -667,7 +682,7 @@ export default function App() {
             style={styles.textarea}
             rows={3}
           />
-          <button onClick={handleSend} disabled={thinking} style={styles.sendBtn}>
+          <button onClick={() => handleSend()} disabled={thinking} style={styles.sendBtn}>
             <i className="ti ti-arrow-right" aria-hidden="true" style={{ fontSize: 18 }} />
           </button>
         </div>
@@ -886,6 +901,7 @@ const styles = {
   dot: { width: "5px", height: "5px", borderRadius: "50%", background: "#8A8D97", display: "inline-block", animation: "blink 1.2s infinite" },
   inputBar: { display: "flex", gap: "10px", padding: "14px 22px 18px", borderTop: "1px solid #2E303A", alignItems: "flex-end" },
   textarea: { flex: 1, resize: "none", background: "#24262D", border: "1px solid #33353D", borderRadius: "8px", padding: "9px 12px", color: "#EFECE6", fontSize: "13.5px", lineHeight: 1.5, fontFamily: "inherit", minHeight: "64px", boxSizing: "border-box" },
+  modeBtn: { background: "none", border: "1px solid #3A3D46", color: "#E8A33D", borderRadius: "8px", padding: "6px 12px", fontSize: "12.5px", cursor: "pointer" },
   sendBtn: { width: "36px", height: "36px", borderRadius: "8px", background: "#E8A33D", color: "#1C1D22", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
   newDealPanel: { display: "flex", flexDirection: "column", gap: "8px", padding: "12px", borderTop: "1px solid #2E303A" },
   timelineLabel: { display: "flex", flexDirection: "column", gap: 4, color: "#9A9CA5", fontSize: "11.5px" },
