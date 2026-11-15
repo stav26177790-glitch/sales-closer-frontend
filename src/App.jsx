@@ -757,6 +757,8 @@ function TimelineEditor({ deal, onSave }) {
   async function save() {
     if (form.client_deadline && !parseClientDate(form.client_deadline)) { setError("Не понял дату — напишите так: 01.12.2026"); return; }
     if (!form.client_deadline && form.production_days) { setError("Укажите дату, к которой нужно клиенту, например 01.12.2026"); return; }
+    // Дата без производства молча сохранялась, а сроки оставались «не заданы» (живой «Зерно 9», 15.11).
+    if (form.client_deadline && !(Number(form.production_days) > 0)) { setError("Укажите производство — сколько рабочих дней, например 12"); return; }
     try {
       await onSave(deal.id, { ...form, client_deadline: parseClientDate(form.client_deadline) || "" });
       setOpen(false);
