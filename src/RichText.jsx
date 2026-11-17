@@ -127,7 +127,7 @@ const s = {
   hr: { height: 1, background: "#3A3D47", margin: "6px 0" },
   hint: { fontSize: "12.5px", color: "#8D919B" },
   p: { margin: 0 },
-  list: { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 5 },
+  list: { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 10 },
   li: { paddingLeft: 2 },
   liMore: { color: "#B9BEC8", fontSize: "13px", marginTop: 2 },
   status: { display: "inline-block", fontSize: "12px", fontWeight: 500, padding: "0 7px", borderRadius: 999, border: "1px solid", lineHeight: "18px", marginLeft: 2 },
