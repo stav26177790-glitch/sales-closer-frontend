@@ -9,7 +9,7 @@ export default function Handbook({ api, openId, onClose }) {
   const [current, setCurrent] = useState(openId || "");
 
   useEffect(() => {
-    api("/api/handbook")
+    api("/handbook")
       .then((r) => setPages(r.pages || []))
       .catch((e) => setError(e.message || "Справочник не загрузился"));
   }, [api]);
