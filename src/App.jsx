@@ -256,6 +256,9 @@ export default function App() {
 
   // Клоузер обновился, а вкладка открыта давно — предлагаем обновить страницу.
   const [updateReady, setUpdateReady] = useState(false);
+  // «Наставник» (владелец 18.11): блок «Почему так» под касаниями. По умолчанию включён; выбор — в этом браузере.
+  const [mentorOn, setMentorOn] = useState(() => { try { return localStorage.getItem("klouzer_mentor") !== "off"; } catch { return true; } });
+  const toggleMentor = () => setMentorOn((v) => { const next = !v; try { localStorage.setItem("klouzer_mentor", next ? "on" : "off"); } catch {} return next; });
   useEffect(() => {
     if (import.meta.env.DEV) return;
     async function check() {
@@ -600,6 +603,14 @@ export default function App() {
             </button>
           </div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "18px" }}>
+            <button
+              style={{ ...styles.mentorBtn, ...(mentorOn ? styles.mentorBtnOn : null) }}
+              onClick={toggleMentor}
+              title="Наставник: под каждым касанием — почему оно такое, со ссылкой на методику"
+              aria-pressed={mentorOn}
+            >
+              <i className="ti ti-school" aria-hidden="true" style={{ fontSize: 14 }} /> Наставник
+            </button>
             <CriteriaBulbs criteria={deal.criteria} />
             <button
               style={styles.deleteDealBtn}
@@ -625,7 +636,7 @@ export default function App() {
                 <div style={{ ...styles.bubble, ...BUBBLE_STYLES[variant], whiteSpace: m.role === "user" ? "pre-line" : "normal" }}>
                   {tag && <div style={styles.bubbleTag}>{tag}</div>}
                   {/* Ответы Клоузера — с разметкой; сообщения менеджера — как есть. */}
-                  {m.role === "user" ? m.content : <RichText text={m.content} />}
+                  {m.role === "user" ? m.content : <RichText text={m.content} mentor={mentorOn} />}
                 </div>
               </div>
             );
@@ -882,6 +893,8 @@ const styles = {
   topBar: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 22px 12px", borderBottom: "1px solid #2E303A" },
   topBarClient: { fontSize: "16px", fontWeight: 500 },
   topBarMeta: { fontSize: "12px", color: "#8A8D97", marginTop: "2px" },
+  mentorBtn: { height: "26px", padding: "0 10px", borderRadius: "6px", background: "transparent", border: "1px solid #33353D", color: "#7D808A", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "12px", flexShrink: 0 },
+  mentorBtnOn: { color: "#E8A33D", borderColor: "#5A4A2E", background: "rgba(232,163,61,0.08)" },
   deleteDealBtn: { width: "26px", height: "26px", borderRadius: "6px", background: "transparent", border: "1px solid #33353D", color: "#9AA0AC", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
   bulbRow: { display: "flex", gap: "14px" },
   bulbItem: { display: "flex", flexDirection: "column", alignItems: "center", gap: "5px" },

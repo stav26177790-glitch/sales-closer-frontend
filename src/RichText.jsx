@@ -52,7 +52,13 @@ function parseBlocks(text) {
     const line = raw.replace(/\s+$/, "");
     if (!line.trim()) { flushPara(); flushList(); continue; }
     let m;
-    if ((m = line.match(/^(#{2,3})\s+(.*)$/))) {
+    if ((m = line.match(/^>>\s?(.*)$/))) {
+      // «Наставник»: строки «>> » подряд — один блок «Почему так».
+      flushPara(); flushList();
+      const last = blocks[blocks.length - 1];
+      if (last && last.type === "mentor") last.lines.push(m[1]);
+      else blocks.push({ type: "mentor", lines: [m[1]] });
+    } else if ((m = line.match(/^(#{2,3})\s+(.*)$/))) {
       flushPara(); flushList();
       blocks.push({ type: m[1].length === 2 ? "h2" : "h3", text: m[2] });
     } else if (/^-{3,}$/.test(line.trim())) {
@@ -80,7 +86,7 @@ function parseBlocks(text) {
   return blocks;
 }
 
-export default function RichText({ text }) {
+export default function RichText({ text, mentor = true }) {
   const blocks = parseBlocks(text);
   return (
     <div style={s.root}>
@@ -91,6 +97,18 @@ export default function RichText({ text }) {
           case "h3": return <div key={key} style={{ ...s.h3, marginTop: i ? 10 : 0 }}>{inline(b.text, key)}</div>;
           case "hr": return <div key={key} style={s.hr} />;
           case "hint": return <div key={key} style={s.hint}>{inline(b.text, key)}</div>;
+          case "mentor": {
+            if (!mentor) return null;
+            const [head, ...rest] = b.lines;
+            const title = /^\*\*[^*]+\*\*$/.test(head) ? head : null;
+            const items = title ? rest : b.lines;
+            return (
+              <div key={key} style={s.mentor}>
+                <div style={s.mentorTitle}>{title ? title.slice(2, -2) : "Почему так"}</div>
+                {items.map((l, k) => <div key={k} style={s.mentorLine}>{inline(l, `${key}-${k}`)}</div>)}
+              </div>
+            );
+          }
           case "ul":
           case "ol": {
             const Tag = b.type;
@@ -126,6 +144,9 @@ const s = {
   h3: { fontSize: "13.5px", fontWeight: 600, color: "#E8A33D" },
   hr: { height: 1, background: "#3A3D47", margin: "6px 0" },
   hint: { fontSize: "12.5px", color: "#8D919B" },
+  mentor: { borderLeft: "2px solid #5A4A2E", background: "rgba(232,163,61,0.06)", padding: "8px 10px", borderRadius: "0 6px 6px 0", display: "flex", flexDirection: "column", gap: 4 },
+  mentorTitle: { fontSize: "12px", fontWeight: 600, color: "#E8A33D", letterSpacing: "0.02em" },
+  mentorLine: { fontSize: "12.5px", color: "#B9BEC8", lineHeight: 1.45 },
   p: { margin: 0 },
   list: { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 10 },
   li: { paddingLeft: 2 },
