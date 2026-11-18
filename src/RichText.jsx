@@ -86,7 +86,7 @@ function parseBlocks(text) {
   return blocks;
 }
 
-export default function RichText({ text, mentor = true }) {
+export default function RichText({ text, mentor = true, onRef }) {
   const blocks = parseBlocks(text);
   return (
     <div style={s.root}>
@@ -105,7 +105,22 @@ export default function RichText({ text, mentor = true }) {
             return (
               <div key={key} style={s.mentor}>
                 <div style={s.mentorTitle}>{title ? title.slice(2, -2) : "Почему так"}</div>
-                {items.map((l, k) => <div key={k} style={s.mentorLine}>{inline(l, `${key}-${k}`)}</div>)}
+                {items.map((l, k) => {
+                  // «(Возражения, Переписка)» в конце строки — ссылки на страницы справочника.
+                  const ref = onRef ? l.match(/^(.*)\(([^()]+)\)\s*$/) : null;
+                  if (!ref) return <div key={k} style={s.mentorLine}>{inline(l, `${key}-${k}`)}</div>;
+                  const names = ref[2].split(/,\s*/);
+                  return (
+                    <div key={k} style={s.mentorLine}>
+                      {inline(ref[1], `${key}-${k}`)}(
+                      {names.map((n, j) => (
+                        <React.Fragment key={j}>{j > 0 && ", "}
+                          <button style={s.mentorRef} onClick={() => onRef(n)} title="Открыть в справочнике">{n}</button>
+                        </React.Fragment>
+                      ))})
+                    </div>
+                  );
+                })}
               </div>
             );
           }
@@ -146,6 +161,7 @@ const s = {
   hint: { fontSize: "12.5px", color: "#8D919B" },
   mentor: { borderLeft: "2px solid #5A4A2E", background: "rgba(232,163,61,0.06)", padding: "8px 10px", borderRadius: "0 6px 6px 0", display: "flex", flexDirection: "column", gap: 4 },
   mentorTitle: { fontSize: "12px", fontWeight: 600, color: "#E8A33D", letterSpacing: "0.02em" },
+  mentorRef: { background: "none", border: "none", padding: 0, color: "#E8A33D", textDecoration: "underline dotted", textUnderlineOffset: 2, cursor: "pointer", font: "inherit" },
   mentorLine: { fontSize: "12.5px", color: "#B9BEC8", lineHeight: 1.45 },
   p: { margin: 0 },
   list: { margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 10 },

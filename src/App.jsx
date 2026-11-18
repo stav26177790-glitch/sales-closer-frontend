@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { getAccessToken, signOut } from "./supabase.js";
 import RichText from "./RichText.jsx";
+import Handbook from "./Handbook.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:3001/api"; // задаётся как VITE_API_BASE в Netlify
 
@@ -258,6 +259,8 @@ export default function App() {
   const [updateReady, setUpdateReady] = useState(false);
   // «Наставник» (владелец 18.11): блок «Почему так» под касаниями. По умолчанию включён; выбор — в этом браузере.
   const [mentorOn, setMentorOn] = useState(() => { try { return localStorage.getItem("klouzer_mentor") !== "off"; } catch { return true; } });
+  // Справочник: null — закрыт; "" — открыт на первой странице; иначе — страница / ссылка из «Наставника».
+  const [handbook, setHandbook] = useState(null);
   const toggleMentor = () => setMentorOn((v) => { const next = !v; try { localStorage.setItem("klouzer_mentor", next ? "on" : "off"); } catch {} return next; });
   useEffect(() => {
     if (import.meta.env.DEV) return;
@@ -491,12 +494,16 @@ export default function App() {
 
   return (
     <div style={styles.app} ref={appRef}>
+      {handbook !== null && <Handbook api={api} openId={handbook} onClose={() => setHandbook(null)} />}
       <div style={{ ...styles.sidebar, width: sidebarWidth }}>
         <div style={styles.sidebarHeader}>
           <span style={styles.brandMark}>SC</span>
           <span style={styles.brandText}>Sales Closer</span>
           <button style={styles.addBtn} onClick={() => setShowNewDeal(true)} aria-label="Новая сделка">
             <i className="ti ti-plus" aria-hidden="true" style={{ fontSize: 16 }} />
+          </button>
+          <button style={styles.addBtn} onClick={() => setHandbook("")} aria-label="Справочник" title="Справочник методик">
+            <i className="ti ti-book" aria-hidden="true" style={{ fontSize: 15 }} />
           </button>
           <button style={styles.addBtn} onClick={signOut} aria-label="Выйти" title="Выйти">
             <i className="ti ti-logout" aria-hidden="true" style={{ fontSize: 15 }} />
@@ -636,7 +643,7 @@ export default function App() {
                 <div style={{ ...styles.bubble, ...BUBBLE_STYLES[variant], whiteSpace: m.role === "user" ? "pre-line" : "normal" }}>
                   {tag && <div style={styles.bubbleTag}>{tag}</div>}
                   {/* Ответы Клоузера — с разметкой; сообщения менеджера — как есть. */}
-                  {m.role === "user" ? m.content : <RichText text={m.content} mentor={mentorOn} />}
+                  {m.role === "user" ? m.content : <RichText text={m.content} mentor={mentorOn} onRef={(r) => setHandbook(r)} />}
                 </div>
               </div>
             );
